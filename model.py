@@ -3,11 +3,11 @@ from datetime import datetime
 from typing import Optional
 
 # Pydantic model for user registration
-class UserLogin(BaseModel):
+class LoginUser(BaseModel):
     email: EmailStr
     password: str
 
-class GoogleLogin(BaseModel):
+class GoogleUser(BaseModel):
     email: EmailStr
     given_name: Optional[str] = None
     family_name: Optional[str] = None

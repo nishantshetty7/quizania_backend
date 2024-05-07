@@ -5,7 +5,7 @@ from passlib.context import CryptContext
 import jwt
 from datetime import datetime, timedelta
 
-from model import User, UserLogin, GoogleLogin, UserResponse
+from model import User, LoginUser, GoogleUser, UserResponse
 from database import users_collection
 
 from config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_MINUTES, ALGORITHM
@@ -91,9 +91,9 @@ async def register_user(user_data: User):
 
 # Authenticate user and return JWT token
 @app.post("/login")
-async def login(form_data: UserLogin):
-    user = await users_collection.find_one({"email": form_data.email})
-    if not user or not verify_password(form_data.password, user["password"]):
+async def login(user_data: LoginUser):
+    user = await users_collection.find_one({"email": user_data.email})
+    if not user or not verify_password(user_data.password, user["password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
@@ -115,13 +115,11 @@ async def login(form_data: UserLogin):
 
 
 @app.post("/google/login")
-async def google_login(request_data: GoogleLogin):
-    email = request_data.email
-    first_name = request_data.given_name
-    last_name = request_data.family_name
-    image = request_data.picture
-    user_data = {"email": email, "first_name": first_name, 
-                 "last_name": last_name, "profile_pic": image}
+async def google_login(user_data: GoogleUser):
+    email = user_data.email
+    first_name = user_data.given_name
+    last_name = user_data.family_name
+    image = user_data.picture
 
     if not email:
         raise HTTPException(
@@ -134,9 +132,11 @@ async def google_login(request_data: GoogleLogin):
     if not user:
         try:
             hashed_password = hash_password(f"{email}_{first_name}")
-            new_user = dict(user_data)
-            new_user["password"] = hashed_password
-            new_user.update({"is_active": True, "auth_type": "google"})
+            new_user = {"email": email, "password": hashed_password, 
+                        "first_name": first_name, "last_name": last_name, 
+                        "profile_pic": image, "is_active": True,
+                        "auth_type": "google"
+                        }
             user = User(**new_user).model_dump()
             await users_collection.insert_one(user)
         except Exception as e:
