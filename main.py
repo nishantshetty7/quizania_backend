@@ -11,6 +11,7 @@ from database import users_collection
 from config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_MINUTES, ALGORITHM
 from auth import authorize
 import json
+import socketio
 
 app = FastAPI()
 
@@ -177,3 +178,89 @@ async def logout(request: Request):
 async def protected(payload: dict = Depends(authorize)):
     print(payload)
     return "works"
+
+
+# WebSocket endpoint
+sio = socketio.AsyncServer(cors_allowed_origins='*',async_mode='asgi')
+
+#wrap with ASGI application
+socket_app = socketio.ASGIApp(sio)
+app.mount("/", socket_app)
+
+redis_data = dict()
+
+@sio.event
+async def connect(sid, data):
+    print(f"client connected: {sid}")
+
+@sio.event
+async def msg(sid, data):
+    room = data['room']
+    print("Msg receive from " +str(sid) +"and msg is : ",str(data))
+    await sio.emit("msg", data, room=room)
+
+@sio.event
+async def disconnect(sid):
+    print(f"client disconnected: {sid}")
+
+@sio.event
+async def join_room(sid, user:dict):
+    join_user = True
+    quiz_type = None
+
+    room = user["room"]
+    
+    if room not in redis_data:
+        redis_data[room] = dict()
+    else:
+        pass
+
+    user["sid"] = sid
+    room_users = redis_data[room]
+    number_of_users = len(room_users.keys())
+    
+    if number_of_users < 2:
+        redis_data[room][user["name"]] = user
+    elif number_of_users == 2:
+        if user["name"] in room_users:
+            redis_data[room][user["name"]] = user
+        else:
+            join_user = False
+    else:
+        join_user = False
+
+    if join_user:
+        await sio.enter_room(sid, room)
+        print(f'Socket {sid} joined room {room}')
+        updated_room = redis_data[room]
+        event_data = {"users": redis_data[room]}
+        if len(updated_room.keys()) == 1:
+            quiz_type = "lobby"
+            event_name = "user_joined"
+        elif len(updated_room.keys()) == 2:
+            quiz_type = "question"
+            event_data["question"] = {}
+            event_name = "quiz_start"
+        join_data = {"type": quiz_type, "user": user["name"], "data": event_data}
+        await sio.emit(event_name, join_data, room=room)
+    else:
+        await sio.emit("quiz_error", {"error": "Room is in use"}, room=sid)
+
+    print(quiz_type) 
+    print(redis_data)
+
+@sio.event
+async def leave_room(sid, user:dict):
+    name = user["name"]
+    room = user["room"]
+    await sio.leave_room(sid, room)
+    print(f'Socket {sid} left room {room}')
+    if redis_data.get(room):
+        if redis_data[room].get(name):
+            del redis_data[room][name]
+
+        updated_users = redis_data[room]
+    
+        if len(updated_users) == 1:
+            await sio.emit("user_left", {"type": "lobby", "user": name, "data": updated_users}, room=room)
+    print(redis_data)
