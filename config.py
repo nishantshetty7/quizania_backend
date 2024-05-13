@@ -15,6 +15,19 @@ REFRESH_TOKEN_EXPIRE_MINUTES = int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", def
 
 MONGO_URL = os.getenv("MONGO_URL", default="")
 
+REDIS_HOST = os.getenv("REDIS_HOST", default="")
+REDIS_PORT = os.getenv("REDIS_PORT", default="6379")
+REDIS_USERNAME = os.getenv("REDIS_USERNAME", default="")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", default="")
+
+REDIS_CONFIG = {
+    "host": REDIS_HOST,
+    "port": REDIS_PORT,
+    "username": REDIS_USERNAME,
+    "password": REDIS_PASSWORD,
+    "decode_responses": True
+}
+
 # Ensure that the SECRET_KEY variable is set
 if not SECRET_KEY:
     raise EnvironmentError("Secret key not found in environment variables.")
